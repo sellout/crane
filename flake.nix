@@ -1,16 +1,18 @@
 {
   description = "A Nix library for building cargo projects. Never build twice thanks to incremental artifact caching.";
 
-  inputs = { };
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
   nixConfig = {
     extra-substituters = [ "https://crane.cachix.org" ];
     extra-trusted-public-keys = [ "crane.cachix.org-1:8Scfpmn9w+hGdXH/Q9tTLiYAE/2dnJYRJP7kl80GuRk=" ];
   };
 
-  outputs = { ... }:
+  outputs = { nixpkgs, ... }:
     let
+      lib = import ./pure-lib { inherit (nixpkgs) lib; };
       mkLib = pkgs: import ./default.nix {
+        pureLib = lib;
         inherit pkgs;
       };
       nodes = (builtins.fromJSON (builtins.readFile ./test/flake.lock)).nodes;
@@ -48,7 +50,7 @@
       ];
     in
     {
-      inherit mkLib;
+      inherit lib mkLib;
 
       overlays.default = _final: _prev: { };
 
@@ -121,7 +123,6 @@
       };
     } // eachDefaultSystem (system:
       let
-        nixpkgs = inputFromLock "nixpkgs";
         pkgs = import nixpkgs {
           inherit system;
         };

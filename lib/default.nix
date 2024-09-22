@@ -1,4 +1,5 @@
 { lib
+, pureLib
 , stdenv
 , makeScopeWithSplicing'
 , splicePackages
@@ -11,11 +12,6 @@
 }:
 
 let
-  minSupported = "24.05";
-  current = lib.concatStringsSep "." (lib.lists.sublist 0 2 (lib.splitVersion lib.version));
-  isUnsupported = lib.versionOlder current minSupported;
-  msg = "crane requires at least nixpkgs-${minSupported}, supplied nixpkgs-${current}";
-
   # Helps keep things in sync between `overrideToolchain` and `keep`
   attrsForToolchainOverride = [
     "cargo"
@@ -40,13 +36,9 @@ let
   scopeFn = self:
     let
       inherit (self) callPackage;
-
-      internalCrateNameFromCargoToml = callPackage ./internalCrateNameFromCargoToml.nix { };
-      internalCrateNameForCleanSource = callPackage ./internalCrateNameForCleanSource.nix {
-        inherit internalCrateNameFromCargoToml;
-      };
+      inherit (pureLib) registryFromDownloadUrl;
     in
-    {
+    pureLib // {
       appendCrateRegistries = input: self.overrideScope (_final: prev: {
         crateRegistries = prev.crateRegistries // (lib.foldl (a: b: a // b) { } input);
       });
@@ -65,19 +57,11 @@ let
       cargoNextest = callPackage ./cargoNextest.nix { };
       cargoTarpaulin = callPackage ./cargoTarpaulin.nix { };
       cargoTest = callPackage ./cargoTest.nix { };
-      cleanCargoSource = callPackage ./cleanCargoSource.nix {
-        inherit internalCrateNameForCleanSource;
-      };
-      cleanCargoToml = callPackage ./cleanCargoToml.nix { };
       configureCargoCommonVarsHook = callPackage ./setupHooks/configureCargoCommonVars.nix { };
       configureCargoVendoredDepsHook = callPackage ./setupHooks/configureCargoVendoredDeps.nix { };
       craneUtils = callPackage ../pkgs/crane-utils { };
 
-      crateNameFromCargoToml = callPackage ./crateNameFromCargoToml.nix {
-        inherit internalCrateNameFromCargoToml;
-      };
-
-      crateRegistries = self.registryFromDownloadUrl {
+      crateRegistries = registryFromDownloadUrl {
         dl = "https://static.crates.io/crates";
         indexUrl = "https://github.com/rust-lang/crates.io-index";
       };
@@ -85,8 +69,6 @@ let
       devShell = callPackage ./devShell.nix { };
       downloadCargoPackage = callPackage ./downloadCargoPackage.nix { };
       downloadCargoPackageFromGit = callPackage ./downloadCargoPackageFromGit.nix { };
-      filterCargoSources = callPackage ./filterCargoSources.nix { };
-      findCargoFiles = callPackage ./findCargoFiles.nix { };
       inheritCargoArtifactsHook = callPackage ./setupHooks/inheritCargoArtifacts.nix { };
       installCargoArtifactsHook = callPackage ./setupHooks/installCargoArtifacts.nix { };
       installFromCargoBuildLogHook = callPackage ./setupHooks/installFromCargoBuildLog.nix { };
@@ -110,13 +92,6 @@ let
         lib.warnIf needsSplicing warningMsg (lib.genAttrs attrsForToolchainOverride (_: toolchain))
       );
 
-      path = callPackage ./path.nix {
-        inherit internalCrateNameForCleanSource;
-      };
-
-      registryFromDownloadUrl = callPackage ./registryFromDownloadUrl.nix { };
-      registryFromGitIndex = callPackage ./registryFromGitIndex.nix { };
-      registryFromSparse = callPackage ./registryFromSparse.nix { };
       removeReferencesToVendoredSourcesHook = callPackage ./setupHooks/removeReferencesToVendoredSources.nix { };
       replaceCargoLockHook = callPackage ./setupHooks/replaceCargoLockHook.nix { };
       taploFmt = callPackage ./taploFmt.nix { };
@@ -127,19 +102,17 @@ let
       vendorGitDeps = callPackage ./vendorGitDeps.nix { };
       writeTOML = callPackage ./writeTOML.nix { };
     };
-
-  craneSpliced = makeScopeWithSplicing' {
-    f = scopeFn;
-    otherSplices = {
-      selfBuildBuild = lib.makeScope pkgsBuildBuild.newScope scopeFn;
-      selfBuildHost = lib.makeScope pkgsBuildHost.newScope scopeFn;
-      selfBuildTarget = lib.makeScope pkgsBuildTarget.newScope scopeFn;
-      selfHostHost = lib.makeScope pkgsHostHost.newScope scopeFn;
-      selfHostTarget = lib.makeScope pkgsHostTarget.newScope scopeFn;
-      selfTargetTarget = lib.optionalAttrs (pkgsTargetTarget?newScope) (lib.makeScope pkgsTargetTarget.newScope scopeFn);
-    };
-    keep = self: lib.optionalAttrs (self?cargo)
-      (lib.genAttrs attrsForToolchainOverride (n: self.${n}));
-  };
 in
-lib.warnIf isUnsupported msg (craneSpliced)
+makeScopeWithSplicing' {
+  f = scopeFn;
+  otherSplices = {
+    selfBuildBuild = lib.makeScope pkgsBuildBuild.newScope scopeFn;
+    selfBuildHost = lib.makeScope pkgsBuildHost.newScope scopeFn;
+    selfBuildTarget = lib.makeScope pkgsBuildTarget.newScope scopeFn;
+    selfHostHost = lib.makeScope pkgsHostHost.newScope scopeFn;
+    selfHostTarget = lib.makeScope pkgsHostTarget.newScope scopeFn;
+    selfTargetTarget = lib.optionalAttrs (pkgsTargetTarget?newScope) (lib.makeScope pkgsTargetTarget.newScope scopeFn);
+  };
+  keep = self: lib.optionalAttrs (self?cargo)
+    (lib.genAttrs attrsForToolchainOverride (n: self.${n}));
+}

@@ -1,3 +1,5 @@
-{ pkgs ? import <nixpkgs> { } }:
+{ pkgs ? import <nixpkgs> { }
+, pureLib ? import ./pure-lib { inherit (pkgs) lib; }
+}:
 
-pkgs.callPackage ./lib { }
+pkgs.callPackage ./lib { inherit pureLib; }

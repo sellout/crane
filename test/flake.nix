@@ -1,7 +1,7 @@
 {
   inputs = {
     # NB: nixpkgs-unstable testing will come from the root flake
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs.follows = "crane/nixpkgs"
     nixpkgs-latest-release.url = "github:NixOS/nixpkgs/release-24.05";
     nixpkgs-darwin.url = "github:NixOS/nixpkgs/nixpkgs-24.05-darwin";
 
